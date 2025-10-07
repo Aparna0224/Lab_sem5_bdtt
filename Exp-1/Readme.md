@@ -215,7 +215,7 @@ hdfs dfs -put /localfiles/data/* /exp_1/
 ```bash
 cd /localfiles/data
 mkdir -p wc_classes
-javac -cp $(hadoop classpath) -d wc_classes WC_Mapper.java WC_Reducer.java WC_Driver.java
+javac -cp `hadoop classpath' -d wc_classes WC_Mapper.java WC_Reducer.java WC_Driver.java
 jar -cvf wordcount-combiner.jar -C wc_classes/ .
 echo "hello hadoop hello docker hello world" > input.txt
 ```
