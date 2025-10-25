@@ -1,274 +1,136 @@
-# 🧩 Hadoop WordCount with Combiner — Docker Setup
+# Experiment 1: Hadoop WordCount with Combiner
 
-This project demonstrates running a Hadoop MapReduce WordCount job with a Combiner inside a Docker container.
-The Combiner reduces intermediate data transferred between Mapper and Reducer, improving job efficiency.
+## Aim
+To implement a Hadoop MapReduce WordCount job with a Combiner to demonstrate efficient word frequency counting and intermediate data optimization.
 
-## 🔧 1️⃣ Prerequisites
+## Concept
+MapReduce is a programming model for processing large datasets with a parallel distributed algorithm. WordCount is the classic "Hello World" of MapReduce, counting word occurrences in text. A Combiner acts as a mini-reducer on the mapper node, reducing intermediate key-value pairs before shuffle/sort phase, improving performance by minimizing data transfer to reducers.
 
-Before starting, ensure the following:
+## Prerequisites
+- Hadoop 3.x running in Docker container
+- Java 8 or higher installed in the environment
+- Input dataset: input.txt (text file)
 
-- **Docker installed** on your host machine
-  - Docker allows you to run Hadoop inside an isolated container without installing it directly on your host OS.
+## Dataset Overview
+The experiment uses input.txt with the text: "hello hadoop hello docker hello world"
 
-- **Hadoop Docker image**: `ronnieallen/myhadoop`
-  - Pre-installed with:
-    - **Hadoop 3.2.1** — distributed computing framework
-    - **Java JDK 1.8** — required to compile and run MapReduce jobs
+Expected to produce word counts showing frequency of each unique word.
 
-- **Basic understanding** of HDFS (Hadoop Distributed File System) and MapReduce programming
+## Procedure
 
-## 📂 2️⃣ Project Structure on Host
-
-Organize your project files like this:
-
-```
-~/Documents/hadoop_lab/
-├─ data/
-│  ├─ WC_Mapper.java       # Mapper class
-│  ├─ WC_Reducer.java      # Reducer & Combiner class
-│  ├─ WC_Driver.java       # Driver class
-├─ input.txt               # Sample input text file
-```
-
-- **Mapper class** (`WC_Mapper.java`): Reads input data line by line and emits intermediate key-value pairs.
-- **Reducer class** (`WC_Reducer.java`): Aggregates intermediate results; optionally acts as a combiner to reduce network traffic.
-- **Driver class** (`WC_Driver.java`): Configures and submits the MapReduce job.
-
-The `data/` folder will also store compiled `.class` files and the final `.jar` file.
-
-## 💡 3️⃣ Key Concepts
-
-### 3.1 pwd
-- **Stands for** Print Working Directory
-- **Shows** the full path of the current directory in the terminal
-- **Useful** to confirm your current path before mounting it to Docker
-
-**Example:**
+### Step 1: Copy Experiment Files to Hadoop Container
+**Command:**
 ```bash
-pwd
-# Output: /home/aparna/Documents/hadoop_lab
+docker cp Exp-1 hadoop:/Exp-1
+```
+**Explanation:** Copies the Exp-1 directory containing Java source files and dataset from host to the running Hadoop Docker container.
+**Expected Output:**
+```
+Successfully copied 16.9kB to hadoop:/Exp-1
 ```
 
-### 3.2 Classpath
-The classpath is a list of directories and JAR files that Java uses to locate classes and libraries.
-Hadoop programs depend on Hadoop libraries; if missing, compilation or execution will fail.
-
-**Example:**
+### Step 2: Verify Hadoop Environment
+**Command:**
 ```bash
-javac -cp `hadoop classpath` WC_Mapper.java
+docker exec hadoop hadoop version
+```
+**Explanation:** Verifies that Hadoop is properly installed and running in the Docker container named "hadoop".
+**Expected Output:**
+```
+Hadoop 3.2.1
+Source code repository https://gitbox.apache.org/repos/asf/hadoop.git -r b3cbbb467e22ea829b3808f4b7b01d07e0bf3842
+Compiled by rohithsharmaks on 2019-09-10T15:56Z
+Compiled with protoc 2.5.0
+From source with checksum 776eaf9eee9c0ffc370bcbc1888737
+This command was run using /opt/hadoop-3.2.1/share/hadoop/common/hadoop-common-3.2.1.jar
 ```
 
-The command `hadoop classpath` outputs all Hadoop library paths needed for compiling MapReduce code.
-
-### 3.3 JAR File
-A Java Archive (JAR) packages compiled `.class` files and resources into a single executable file.
-
-Hadoop expects a single JAR containing all Mapper, Reducer, and Driver classes.
-
-**Example:**
+### Step 3: Compile Java Classes
+**Command:**
 ```bash
-jar -cvf wordcount-combiner.jar -C wc_classes/ .
+docker exec hadoop bash -c "cd /Exp-1 && javac -classpath \$(hadoop classpath) -d . WC_Mapper.java WC_Reducer.java WC_Driver.java"
 ```
+**Explanation:** Compiles the Java source files using the Hadoop classpath, generating the corresponding .class files in the current directory.
+**Expected Output:**
+Clean compilation with no errors.
 
-**Flags:**
-- `-c` → Create archive
-- `-v` → Verbose output
-- `-f` → Specify filename
-- `-C wc_classes/ .` → Include all compiled `.class` files
-
-### 3.4 Docker Volume Mount (-v)
-Maps a directory on the host machine to a directory inside the Docker container.
-
-**Why external volume is required:**
-- Ensures persistent storage for Hadoop NameNode & DataNode data
-- Allows shared access between host and container
-- Enables retrieving output and JAR files without copying manually
-
-**Example:**
+### Step 4: Create JAR Package
+**Command:**
 ```bash
--v hadoop_namenode:/hadoop/dfs/name
--v hadoop_datanode:/hadoop/dfs/data
--v $(pwd):/localfiles
+docker exec hadoop bash -c "cd /Exp-1 && jar cf wordcount-combiner.jar WC*.class"
+```
+**Explanation:** Packages the compiled class files into a JAR file named wordcount-combiner.jar for distribution and execution.
+**Expected Output:**
+JAR file created successfully.
+
+### Step 5: Upload Dataset to HDFS
+**Command:**
+```bash
+docker exec hadoop hdfs dfs -mkdir -p /input
+docker exec hadoop hdfs dfs -put /Exp-1/input.txt /input/
+```
+**Explanation:** Creates the /input directory in HDFS and uploads the input.txt file from the container's local filesystem to HDFS.
+**Expected Output:**
+SASL encryption trust check message and confirmation of successful file transfer.
+
+### Step 6: Execute MapReduce Job
+**Command:**
+```bash
+docker exec hadoop hadoop jar /Exp-1/wordcount-combiner.jar WC_Driver /input/input.txt /output_wordcount
+```
+**Explanation:** Runs the WordCount MapReduce job with combiner, processing input.txt and storing results in /output_wordcount directory.
+**Expected Output:**
+Job submission logs showing map and reduce tasks completion, counters indicating combiner effectiveness (Combine input records=6, Combine output records=4), and final job success message.
+
+### Step 7: View Results
+**Command:**
+```bash
+docker exec hadoop hdfs dfs -cat /output_wordcount/part-r-00000
+```
+**Explanation:** Displays the contents of the output file, showing the word count results sorted by word.
+**Expected Output:**
+```
+docker	1
+hadoop	1
+hello	3
+world	1
 ```
 
-## 🧠 4️⃣ Java Source Code
-
-### WC_Driver.java
-```java
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-
-public class WC_Driver {
-    public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.err.println("Usage: WC_Driver <input> <output>");
-            System.exit(2);
-        }
-        Job job = Job.getInstance(new Configuration(), "Word Count with Combiner");
-        job.setJarByClass(WC_Driver.class);
-        job.setMapperClass(WC_Mapper.class);
-        job.setCombinerClass(WC_Reducer.class);
-        job.setReducerClass(WC_Reducer.class);
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
-        FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
-    }
-}
-```
+## Code Structure
 
 ### WC_Mapper.java
-```java
-import java.io.IOException;
-import java.util.StringTokenizer;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Mapper;
-
-public class WC_Mapper extends Mapper<LongWritable, Text, Text, IntWritable> {
-    private final static IntWritable one = new IntWritable(1);
-    private Text word = new Text();
-
-    @Override
-    protected void map(LongWritable key, Text value, Context context)
-        throws IOException, InterruptedException {
-        StringTokenizer itr = new StringTokenizer(value.toString());
-        while (itr.hasMoreTokens()) {
-            word.set(itr.nextToken());
-            context.write(word, one);
-        }
-    }
-}
-```
+- **Function:** Reads text input line by line, tokenizes into words, emits each word with count 1
+- **Input:** (line_offset, line_content)
+- **Output:** (word, 1)
 
 ### WC_Reducer.java
-```java
-import java.io.IOException;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Reducer;
+- **Function:** Aggregates word counts from mapper outputs (and combiner), used both as reducer and combiner
+- **Input:** (word, [count1, count2, ...])
+- **Output:** (word, total_count)
 
-public class WC_Reducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-    private IntWritable result = new IntWritable();
+### WC_Driver.java (Driver)
+- **Function:** Configures the MapReduce job with input/output paths, mapper/reducer classes, combiner class, and job settings
+- **Components:** Sets input format (TextInputFormat), output format (TextOutputFormat), key/value types (Text/IntWritable)
 
-    @Override
-    protected void reduce(Text key, Iterable<IntWritable> values, Context context)
-        throws IOException, InterruptedException {
-        int sum = 0;
-        for (IntWritable val : values) {
-            sum += val.get();
-        }
-        result.set(sum);
-        context.write(key, result);
-    }
-}
+## Result
+Successfully executed WordCount MapReduce job with combiner optimization. The combiner reduced intermediate data transfer by aggregating locally on mapper nodes.
+
+**Sample Output:**
+```
+docker	1
+hadoop	1  
+hello	3
+world	1
 ```
 
-## ⚙️ 5️⃣ Steps to Run WordCount in Dockerized Hadoop
+The experiment demonstrates:
+- Basic MapReduce word counting functionality
+- Combiner usage for performance optimization (6 mapper outputs reduced to 4 combiner outputs)
+- Hadoop MapReduce job configuration and execution
+- HDFS input/output handling
 
-### 📁 Step 1: Set Up the Hadoop Lab Directory
-```bash
-cd Documents
-mkdir hadoop_lab
-cd hadoop_lab
-```
-
-Inside the `hadoop_lab` directory, create a `data` folder:
-```bash
-mkdir data
-```
-
-Add your Java files (`WC_Mapper.java`, `WC_Reducer.java`, `WC_Driver.java`) into the `data` folder.
-These files will be mounted into the Docker container to compile and execute your WordCount program.
-
-After adding your Java files:
-```bash
-cd ..
-```
-
-### 🐳 Step 2: Pull and Run the Hadoop Docker Container
-```bash
-docker pull ronnieallen/myhadoop
-docker run -d --name hadoop \
-  -p 9870:9870 -p 9000:9000 -p 9864:9864 \
-  -v hadoop_namenode:/hadoop/dfs/name \
-  -v hadoop_datanode:/hadoop/dfs/data \
-  -v $(pwd)/hadoop_lab:/localfiles \
-  ronnieallen/myhadoop
-```
-
-### 🖥️ Step 3: Access the Hadoop Container
-```bash
-docker exec -it hadoop bash
-hdfs dfs -mkdir /exp_1
-hdfs dfs -put /localfiles/data/* /exp_1/
-```
-
-### ☕ Step 4: Compile and Package the Java Files
-```bash
-cd /localfiles/data
-mkdir -p wc_classes
-javac -cp `hadoop classpath' -d wc_classes WC_Mapper.java WC_Reducer.java WC_Driver.java
-jar -cvf wordcount-combiner.jar -C wc_classes/ .
-echo "hello hadoop hello docker hello world" > input.txt
-```
-
-### 📂 Step 5: Prepare Input and Run the WordCount Job
-```bash
-hdfs dfs -mkdir -p /wordcount/input
-hdfs dfs -put input.txt /wordcount/input
-hdfs dfs -ls /wordcount/input
-hadoop jar /localfiles/data/wordcount-combiner.jar WC_Driver /wordcount/input /wordcount/output
-hdfs dfs -cat /wordcount/output/part-r-00000
-```
-
-### ✅ Step 6: Clean Up
-```bash
-docker stop hadoop
-docker rm hadoop
-```
-
-## 📌 Notes
-
-- Ensure Docker is installed and running on your system.
-- The image `ronnieallen/myhadoop` provides a single-node Hadoop setup.
-- The Java files implement a standard MapReduce WordCount job with a Combiner for optimization.
-
-## 🎯 Expected Output
-
-After running the WordCount job, you should see output similar to:
-```
-docker  1
-hadoop  1
-hello   3
-world   1
-```
-
-This shows the word count for each unique word in the input text, demonstrating that the Combiner successfully reduced intermediate data before sending it to the Reducer.
-
-## 🔧 Troubleshooting
-
-### Common Issues:
-1. **Docker not found**: Ensure Docker is installed and the Docker daemon is running
-2. **Permission denied**: Check that your user has permission to run Docker commands
-3. **Port conflicts**: Make sure ports 9870, 9000, and 9864 are not already in use
-4. **Java compilation errors**: Verify that all Java files are in the correct directory and have proper syntax
-
-### Useful Commands:
-```bash
-# Check Docker status
-docker ps -a
-
-# View Hadoop logs
-docker logs hadoop
-
-# Access Hadoop Web UI
-http://localhost:9870
-```
+## Notes
+- Combiner serves as local reducer on mapper nodes, reducing network traffic
+- Job counters show combiner effectiveness: Combine input records=6, Combine output records=4
+- Uses Hadoop's distributed file system for input/output
+- Single-node setup suitable for learning and small-scale processing
