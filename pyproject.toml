@@ -1,0 +1,14 @@
+[project]
+name = "big-data-spark"
+version = "0.1.0"
+description = "Apache Spark experiments for big data processing"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pyspark>=3.5.0",
+    "findspark>=2.0.1",
+    "numpy>=1.24.4",
+]
+
+[tool.uv]
+package = false
